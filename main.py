@@ -114,14 +114,14 @@ def run_daemon(
 
         def signal_handler(signum, frame):
             sig_name = signal.Signals(signum).name
-            print(f"\n🛑 Received {sig_name}, initiating graceful shutdown...")
+            print(f"\nReceived {sig_name}, initiating graceful shutdown...")
             shutdown_coordinator.initiate_shutdown()
 
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
         # Run main loop
-        print("✅ Daemon started. Press Ctrl+C to stop.\n")
+        print("Daemon started. Press Ctrl+C to stop.\n")
         
         jobs_processed = 0
         while not shutdown_coordinator.should_shutdown():
@@ -131,7 +131,7 @@ def run_daemon(
             else:
                 time.sleep(poll_interval)
 
-        print(f"\n✅ Daemon stopped gracefully. Jobs processed: {jobs_processed}")
+        print(f"\nDaemon stopped gracefully. Jobs processed: {jobs_processed}")
         return 0
 
     except Exception as e:
