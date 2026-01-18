@@ -1,6 +1,11 @@
 """
-State management for storage system.
+storage/state.py
 
+Persistent state management for jobs and results.
+
+This module provides the `StorageState` class, which uses Python's
+`shelve` module to persist `Job` and `Result` objects. It acts as a
+trust boundary by validating all objects upon retrieval.
 """
 
 import shelve
@@ -9,21 +14,39 @@ from typing import Optional
 from models.job import Job
 from models.result import Result
 
+
 class StorageState:
     """
-    Surable storage for Job and Result objects using shelve.
-    Acts as a trust boundary: everything returned is validated.
+    Durable storage for Job and Result objects using shelve.
+
+    This class is responsible for:
+    - Persisting Job and Result data atomically
+    - Namespacing stored keys to avoid collisions
+    - Validating objects on load to prevent propagation of corrupted data
+
+    All objects returned from this storage layer are guaranteed
+    to be valid Pydantic models or None.
     """
-    
+
     def __init__(self, path: str):
+        """
+        Initialize storage state.
+
+        Args:
+            path (str): Filesystem path used by the shelve backend.
+        """
         self._path = path
 
     # ------- Job storage -------
+
     def save_job(self, job: Job) -> None:
         """
-        Save a Job object to storage atomically.
+        Persist a Job object to storage.
+
+        The job is serialized using `model_dump` and stored atomically.
+
         Args:
-            job (Job): The Job object to save.
+            job (Job): Job instance to persist.
         """
         key = f"job:{job.job_id}"
 
@@ -33,10 +56,16 @@ class StorageState:
     def load_job(self, job_id: str) -> Optional[Job]:
         """
         Load a Job object from storage.
+
+        The retrieved data is validated by reconstructing
+        a `Job` model instance.
+
         Args:
-            job_id (str): The ID of the Job to load.
+            job_id (str): Identifier of the job to load.
+
         Returns:
-            Optional[Job]: The loaded Job object, or None if not found.
+            Optional[Job]: Validated Job instance if found and valid,
+                otherwise None.
         """
         key = f"job:{job_id}"
 
@@ -45,20 +74,27 @@ class StorageState:
 
             if raw is None:
                 return None
-            
+
             try:
-                job = Job(**raw)
-                return job
+                return Job(**raw)
             except Exception:
-                # Corrupted or invalid data
+                # Corrupted or invalid stored data
                 return None
-            
+
     # ------- Result storage -------
+
     def save_result(self, result: Result) -> None:
         """
-        Save a Result object to storage atomically.
+        Persist a Result object to storage.
+
+        Results are immutable and write-once. Attempting to overwrite
+        an existing result raises an error.
+
         Args:
-            result (Result): The Result object to save.
+            result (Result): Result instance to persist.
+
+        Raises:
+            RuntimeError: If a result already exists for the job.
         """
         key = f"result:{result.job_id}"
 
@@ -66,16 +102,22 @@ class StorageState:
             if key in db:
                 raise RuntimeError(
                     f"Result for job_id {result.job_id} already exists."
-                    )
+                )
             db[key] = result.model_dump()
 
     def load_result(self, job_id: str) -> Optional[Result]:
         """
         Load a Result object from storage.
+
+        The retrieved data is validated by reconstructing
+        a `Result` model instance.
+
         Args:
-            job_id (str): The ID of the Job whose Result to load.
+            job_id (str): Identifier of the job whose result is requested.
+
         Returns:
-            Optional[Result]: The loaded Result object, or None if not found.
+            Optional[Result]: Validated Result instance if found and valid,
+                otherwise None.
         """
         key = f"result:{job_id}"
 
@@ -84,10 +126,9 @@ class StorageState:
 
             if raw is None:
                 return None
-            
+
             try:
-                result = Result(**raw)
-                return result
+                return Result(**raw)
             except Exception:
-                # Corrupted or invalid data
+                # Corrupted or invalid stored data
                 return None

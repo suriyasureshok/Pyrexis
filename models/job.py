@@ -1,8 +1,13 @@
 """
+models/job.py
+
 Job model definition with status management and validation.
 
-This module defines a Job model using Pydantic, including status management with allowed transitions,
-field validations, and methods to handle job state changes.
+This module defines a `Job` data model using Pydantic. It includes:
+- Strongly typed job status management using enums
+- Explicitly defined allowed state transitions
+- Field-level validation
+- Helper methods for controlled state mutation (status transitions, failure handling)
 """
 
 from enum import Enum
@@ -11,8 +16,20 @@ from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
-# Define JobStatus enum
+
 class JobStatus(str, Enum):
+    """
+    Enumeration of all possible job lifecycle states.
+
+    Attributes:
+        CREATED: Job has been created but not queued.
+        PENDING: Job is queued and waiting for execution.
+        RUNNING: Job is currently executing.
+        RETRYING: Job failed but will be retried.
+        COMPLETED: Job finished successfully.
+        FAILED: Job permanently failed after max retries.
+        CANCELLED: Job was cancelled before completion.
+    """
     CREATED = "created"
     PENDING = "pending"
     RUNNING = "running"
@@ -21,7 +38,7 @@ class JobStatus(str, Enum):
     FAILED = "failed"
     CANCELLED = "cancelled"
 
-# Define allowed status transitions
+
 ALLOWED_TRANSITIONS = {
     JobStatus.CREATED: {JobStatus.PENDING, JobStatus.CANCELLED},
     JobStatus.PENDING: {JobStatus.RUNNING, JobStatus.CANCELLED},
@@ -29,23 +46,30 @@ ALLOWED_TRANSITIONS = {
     JobStatus.RETRYING: {JobStatus.RUNNING, JobStatus.FAILED},
 }
 
-# Define Job model
+
 class Job(BaseModel):
     """
-    Model representing a job with various attributes and status management.
+    Represents a unit of work with controlled state transitions.
+
+    This model encapsulates:
+    - Job metadata
+    - Execution configuration
+    - Retry tracking
+    - State transition enforcement
 
     Attributes:
-    - job_id (str): Unique identifier for the job.
-    - priority (int): Priority of the job, higher values indicate higher priority.
-    - payload (Dict[str, Any]): Payload data for the job.
-    - execution_mode (str): Execution mode of the job.
-    - max_entries (int): Maximum number of entries for the job.
-    - attempts (int): Number of attempts made for the job.
-    - status (JobStatus): Current status of the job.
-    - last_error (Optional[str]): Last error message if the job failed.
-    - created_at (datetime): Timestamp when the job was created.
-    - updated_at (datetime): Timestamp when the job was last updated.
+        job_id (str): Unique identifier for the job.
+        priority (int): Job priority (0–10). Higher means higher priority.
+        payload (Dict[str, Any]): Arbitrary job-specific data.
+        execution_mode (str): Execution strategy ("thread", "process", "async").
+        max_entries (int): Maximum retry attempts allowed.
+        attempts (int): Number of execution attempts made.
+        status (JobStatus): Current lifecycle status of the job.
+        last_error (Optional[str]): Most recent failure message.
+        created_at (datetime): Job creation timestamp (UTC).
+        updated_at (datetime): Last update timestamp (UTC).
     """
+
     job_id: str = Field(..., min_length=1)
     priority: int = Field(..., ge=0, le=10)
     payload: Dict[str, Any]
@@ -58,47 +82,61 @@ class Job(BaseModel):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     @field_validator("execution_mode")
+    @classmethod
     def validate_execution_mode(cls, value: str) -> str:
         """
-        Validate the execution_mode field to ensure it is one of the allowed modes.
+        Validate execution mode.
+
         Args:
-            value (str): The execution mode to validate.
+            value (str): Execution mode to validate.
+
         Returns:
-            str: The validated execution mode.
+            str: Validated execution mode.
+
         Raises:
-            ValueError: If the execution mode is not allowed.
+            ValueError: If execution mode is not supported.
         """
         allowed_modes = {"thread", "process", "async"}
         if value not in allowed_modes:
             raise ValueError(f"execution_mode must be one of {allowed_modes}")
         return value
-    
+
     def transition_to(self, new_status: JobStatus) -> None:
         """
-        Transition the job to a new status if the transition is allowed.
-        
+        Transition the job to a new status if allowed.
+
+        This method enforces the state transition rules defined
+        in `ALLOWED_TRANSITIONS`.
+
         Args:
-            new_status (JobStatus): The new status to transition to.
+            new_status (JobStatus): Target status.
+
         Raises:
-            RuntimeError: If the transition is not allowed.
+            RuntimeError: If the state transition is illegal.
         """
         allowed = ALLOWED_TRANSITIONS.get(self.status, set())
         if new_status not in allowed:
-            raise RuntimeError(f"Illegal state transition: {self.status} -> {new_status}")
-        
+            raise RuntimeError(
+                f"Illegal state transition: {self.status} -> {new_status}"
+            )
+
         self.status = new_status
         self.updated_at = datetime.utcnow()
 
     def record_failure(self, error_message: str) -> None:
         """
-        Record a failure for the job, updating the last error and attempts.
-        
+        Record a job execution failure.
+
+        Updates retry count, stores the error message,
+        and transitions the job to either RETRYING or FAILED
+        depending on retry limits.
+
         Args:
-            error_message (str): The error message to record.
+            error_message (str): Error message describing the failure.
         """
         self.last_error = error_message
         self.attempts += 1
-        
+
         if self.attempts >= self.max_entries:
             self.transition_to(JobStatus.FAILED)
         else:
