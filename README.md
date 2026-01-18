@@ -1,270 +1,289 @@
-# 🚀 PYTHON GOD ENGINE
+# PYREXIS
 
-*A Production-Grade AI Inference & Data Orchestration System (Pure Python)*
+> A pure-Python concurrent job execution engine for AI infrastructure workloads.
 
-[![Python Version](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-47%20passing-brightgreen)]() [![Python](https://img.shields.io/badge/python-3.10+-blue)]() [![License](https://img.shields.io/badge/license-MIT-blue)]()
 
-> You will build a **mini AI platform backend** that ingests data, validates it, schedules jobs, runs concurrent pipelines, caches intelligently, streams results, and exposes a clean API layer — **WITHOUT touching ML libraries**.
+## Why PYREXIS?
 
-Think of it as **"what runs *around* ML models in real companies"**. That's where real engineers live.
+PYREXIS focuses on the **infrastructure around AI**, not models:
+- **Scheduling** — Fair priority-based job ordering with starvation prevention
+- **Retries** — Bounded retry logic with exponential backoff
+- **Concurrency** — Thread/process/async execution models
+- **Streaming** — Pipeline-based incremental processing
+- **Durability** — Persistent state with crash recovery
 
-## 🧠 What You're Building (High-Level)
-
-A **Python-only AI Task Engine** that:
-
-- Accepts jobs (think: AI inference requests)
-- Validates inputs (Pydantic)
-- Schedules tasks (priority + fairness)
-- Executes workloads using:
-  - threading
-  - multiprocessing
-  - asyncio
-- Streams intermediate outputs
-- Handles failures gracefully
-- Persists state
-- Profiles performance
-- Is extensible like a framework
-
-This is **FAANG backend energy**, not Kaggle nonsense.
-
-## 🏗️ System Architecture
-
-```
-python_god_engine/
-│
-├── core/
-│   ├── engine.py          # Orchestrator
-│   ├── scheduler.py       # Priority + fairness
-│   ├── executor.py        # Thread / Process / Async
-│   ├── pipeline.py        # Generator-based pipelines
-│
-├── models/
-│   ├── job.py             # Pydantic models
-│   ├── result.py
-│
-├── concurrency/
-│   ├── threads.py
-│   ├── processes.py
-│   ├── async_tasks.py
-│
-├── utils/
-│   ├── cache.py           # LRU cache
-│   ├── timing.py
-│   ├── logging.py
-│   ├── retry.py
-│
-├── storage/
-│   ├── state.py           # shelve, pickle, json
-│
-├── api/
-│   ├── cli.py             # argparse interface
-│
-├── tests/
-│
-└── main.py
-```
-
-## 🧪 Python Skills — Full God Mode Checklist
-
-### 🔥 Core Language (No Escaping This)
-
-- `__dunder__` methods: `__call__`, `__enter__`, `__exit__`, `__iter__`, `__next__`, `__eq__`, `__hash__`
-- Context managers
-- Descriptors
-- Metaclasses (yes, one)
-- Type hints (PEP 484, 544)
-- `dataclasses`
-
-### ⚙️ Concurrency (Where Most People Cry)
-
-#### 1️⃣ **Threading**
-
-- `threading.Thread`
-- `Lock`, `RLock`, `Semaphore`
-- Thread-safe queues
-
-Use when: IO-bound fake inference, Logging, Streaming
-
-#### 2️⃣ **Multiprocessing**
-
-- `Process`
-- `Pool`
-- Shared memory
-- Pickle constraints
-
-Use when: CPU-heavy simulation tasks, Parallel feature extraction
-
-#### 3️⃣ **Asyncio**
-
-- `async def`
-- `await`
-- `asyncio.Queue`
-- `gather`, `wait`, `create_task`
-
-Use when: Streaming job updates, Event-driven execution
-
-You will **combine all three**. Yes, it's painful. That's the point.
-
-### 🧬 Generators & Pipelines (Elite Python)
-
-```python
-def pipeline(data):
-    for item in data:
-        yield preprocess(item)
-        yield infer(item)
-        yield postprocess(item)
-```
-
-- Lazy execution
-- Backpressure handling
-- Streaming results
-- Memory efficiency
-
-You'll chain generators like a psychopath — correctly.
-
-### 🧾 Pydantic (Your Contract With Reality)
-
-```python
-class Job(BaseModel):
-    job_id: str
-    priority: int
-    payload: dict
-    retries: int = 3
-```
-
-- Validation
-- Serialization
-- Strict typing
-- Error handling
-
-No garbage input survives.
-
-### 📚 Stdlib Mastery (This Is Where You Flex)
-
-| Module                 | Why You Use It                                   |
-| ---------------------- | ------------------------------------------------ |
-| `collections`          | `deque`, `defaultdict`, `Counter`, `OrderedDict` |
-| `bisect`               | Priority scheduling                              |
-| `heapq`                | Job queues                                       |
-| `functools`            | `lru_cache`, `partial`, `wraps`                  |
-| `itertools`            | Infinite streams, batching                       |
-| `contextlib`           | Clean resource handling                          |
-| `logging`              | Structured logs                                  |
-| `traceback`            | Debugging like a grown-up                        |
-| `time`, `perf_counter` | Profiling                                        |
-| `shelve`               | Persistent state                                 |
-| `pickle`, `json`       | Serialization                                    |
-| `signal`               | Graceful shutdown                                |
-| `argparse`             | CLI API                                          |
-
-If you skip these, don't call yourself an AI engineer.
-
-## 🧠 Advanced Features (God Tier)
-
-### 🔁 Retry Engine (Decorator + Context Manager)
-
-- Exponential backoff
-- Failure classification
-- Custom exceptions
-
-### 🧠 Smart Cache
-
-- Custom LRU cache
-- Thread-safe
-- TTL-based invalidation
-
-### 🧬 Plugin System (Metaclass)
-
-- Register new "AI tasks"
-- Auto-discovery
-- Zero hardcoding
-
-### 📊 Profiler
-
-- Measure latency per stage
-- Thread/process metrics
-- Bottleneck detection
-
-## 🧪 Example: Priority Scheduler (Pure Stdlib)
-
-```python
-import heapq
-
-class Scheduler:
-    def __init__(self):
-        self._queue = []
-
-    def submit(self, priority, job):
-        heapq.heappush(self._queue, (-priority, job))
-
-    def next_job(self):
-        return heapq.heappop(self._queue)[1]
-```
-
-Simple. Brutally effective.
-
-## 🧠 Why This Makes You an AI Engineer
-
-Because real AI engineers:
-
-- Don't train models all day
-- Build **systems**
-- Handle **scale**
-- Deal with **failure**
-- Optimize **latency**
-- Think in **pipelines**
-
-This project teaches: **"How Python actually runs production AI systems."**
-
-## 🎯 7-Day Build Plan (Hardcore but Real)
-
-See [Phases.md](Phases.md) for detailed implementation plan.
-
-## 📦 Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/python-god-engine.git
-cd python-god-engine
-
-# Install dependencies (only Pydantic for validation)
-pip install pydantic
-```
-
-## 🚀 Usage
-
-```bash
-# Run the engine
-python main.py --help
-
-# Submit a job
-python main.py submit --job-id "test-job" --priority 5 --payload '{"data": "example"}'
-
-# Monitor jobs
-python main.py monitor
-```
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Implement your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Final Truth Bomb 💣
-
-If you finish this:
-
-- You don't "know Python"
-- **Python knows you**
-- And interviews will *feel unfair to them*
+No ML libraries. No magic. Just reliable job orchestration.
 
 ---
 
-*Built with pure Python stdlib. No crutches. Just enlightenment.*
+## Core Concepts
+
+```mermaid
+graph LR
+    J[Job] --> S[Scheduler]
+    S --> E[Engine]
+    E --> EX[Executor]
+    EX --> P[Pipeline]
+    P --> R[Result]
+    E --> ST[StateStore]
+    ST -.persist.-> E
+```
+
+### **Job** → Unit of work
+- Strongly typed with Pydantic
+- State machine enforcement
+- Priority-based scheduling
+- Configurable execution mode (thread/process/async)
+
+### **Scheduler** → Fair ordering
+- Priority queue with aging
+- Starvation prevention
+- Thread-safe operations
+
+### **Engine** → Lifecycle orchestration
+- Job submission and state management
+- Graceful shutdown coordination
+- Metrics collection
+
+### **Pipeline** → Streamed execution
+- Multi-stage processing
+- Generator-based streaming
+- Progress hooks
+
+### **Executor** → Concurrency router
+- Threads for I/O-bound tasks
+- Processes for CPU-bound tasks
+- Async for event-driven orchestration
+
+---
+
+## Minimal Example
+
+```python
+from core import Engine, Scheduler, ExecutorRouter
+from models import Job, JobStatus
+from storage import StateStore
+from utils import ShutdownCoordinator
+
+# Setup
+scheduler = Scheduler()
+executor = ExecutorRouter()
+state_store = StateStore("./state.db")
+shutdown = ShutdownCoordinator()
+
+engine = Engine(
+    scheduler=scheduler,
+    executor=executor,
+    state_store=state_store,
+    shutdown_coordinator=shutdown
+)
+
+# Create and submit job
+job = Job(
+    job_id="task-1",
+    priority=5,
+    payload={"data": "process_this"},
+    execution_mode="thread"
+)
+
+engine.submit_job(job)
+
+# Run engine loop
+engine.run_loop()  # Processes jobs until shutdown
+```
+
+---
+
+## Job Flow
+
+```mermaid
+flowchart TD
+    A[Create Job] --> B[Submit to Engine]
+    B --> C{Status = CREATED?}
+    C -->|Yes| D[Transition to PENDING]
+    C -->|No| ERROR[ValueError]
+    D --> E[Add to Scheduler]
+    E --> F[Engine.run_next]
+    F --> G[Scheduler.next_job]
+    G -->|Job found| H[Transition to RUNNING]
+    G -->|No jobs| END[Return None]
+    H --> I[Executor routes by mode]
+    I --> J{Execution Mode}
+    J -->|thread| K[ThreadWorkerPool]
+    J -->|process| L[ProcessWorkerPool]
+    J -->|async| M[AsyncTaskRunner]
+    K --> N[Execute Pipeline]
+    L --> N
+    M --> N
+    N --> O{Success?}
+    O -->|Yes| P[Transition to COMPLETED]
+    O -->|No| Q{Retries left?}
+    Q -->|Yes| R[Transition to RETRYING]
+    Q -->|No| S[Transition to FAILED]
+    R --> H
+    P --> T[Save Result]
+    S --> T
+    T --> U[Persist to StateStore]
+```
+
+---
+
+## Failure Model
+
+PYREXIS is designed for **graceful degradation**, not perfect uptime:
+
+- ✅ **Crashes are expected** — Jobs retry automatically
+- ✅ **Retries are bounded** — Max attempts prevent infinite loops  
+- ✅ **Results are immutable** — Once saved, never modified
+- ✅ **State is durable** — Persistent storage survives restarts
+
+### Retry Logic
+```python
+# Job fails during execution
+job.record_failure("Connection timeout")
+
+# Automatic retry if attempts < max_retries
+if job.attempts < job.max_entries:
+    job.status = RETRYING
+    # Exponential backoff: 2^attempts seconds
+else:
+    job.status = FAILED
+```
+
+### Shutdown Behavior
+- **Graceful shutdown** — No new jobs pulled, current jobs finish
+- **Thread pools stop** — Workers exit after current task
+- **Process pools terminate** — Clean resource cleanup
+- **State persists** — All job states saved before exit
+
+---
+
+## When NOT to Use PYREXIS
+
+| ❌ Use Case | Why Not | Use Instead |
+|------------|---------|-------------|
+| Real-time systems (< 10ms latency) | Threading/scheduling overhead | Direct function calls |
+| Distributed clusters | Single-machine only | Celery, Ray |
+| GPU training pipelines | No CUDA awareness | Kubeflow, MLflow |
+| High-throughput streaming (>100k jobs/sec) | Not optimized for scale | Kafka, Flink |
+
+### When to use PYREXIS:
+- ✅ Orchestrating AI inference pipelines (batch processing)
+- ✅ Multi-stage data preprocessing workflows
+- ✅ Concurrent API request handling (I/O-bound)
+- ✅ CPU-intensive batch computations
+- ✅ Retry-heavy external service calls
+
+---
+
+## Installation
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/pyrexis.git
+cd pyrexis
+
+# Install dependencies (minimal)
+pip install pydantic
+
+# Run tests
+python -m unittest discover tests
+```
+
+---
+
+## Testing Philosophy
+
+PYREXIS has **47 brutal tests** that try to break the system:
+
+- ✅ **Starvation prevention** — Low-priority jobs eventually run
+- ✅ **Race conditions** — 500 concurrent job submissions
+- ✅ **Retry exhaustion** — Exact max_retries enforcement
+- ✅ **State transitions** — Illegal transitions rejected
+- ✅ **Graceful shutdown** — No data loss on interrupt
+
+**Key insight**: We test *failure modes*, not just functionality.
+
+```bash
+# Run all tests
+python -m unittest discover tests -v
+
+# Run specific test category
+python -m unittest tests.test_scheduler -v
+python -m unittest tests.test_concurrency -v
+python -m unittest tests.test_shutdown -v
+```
+
+See [docs/TESTING.md](docs/TESTING.md) for detailed testing philosophy.
+
+---
+
+## Project Structure
+
+```
+pyrexis/
+├── core/               # Engine, Scheduler, Pipeline, Executor
+├── models/             # Job and Result data models
+├── storage/            # StateStore persistence
+├── concurrency/        # Thread/Process/Async pools
+├── utils/              # Metrics, Logging, Retry, Shutdown
+├── tests/              # 47 brutal test cases
+└── docs/               # Architecture and design docs
+```
+
+---
+
+## Architecture
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed system design, including:
+- Component interactions
+- State machine diagram
+- Concurrency model
+- Failure recovery strategies
+
+---
+
+## Metrics & Observability
+
+```python
+# Access metrics
+metrics = engine.get_metrics()
+
+# View counters
+print(metrics.get_counters())
+# {'job.retries': 3}
+
+# View timings
+print(metrics.get_timings())
+# {'job.execution': {'count': 10, 'avg': 0.15, 'max': 0.42}}
+```
+
+Metrics are thread-safe and collected automatically during execution.
+
+---
+
+## Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines:
+- Small PRs preferred
+- Tests required for all changes
+- No new dependencies without discussion
+- Readability > cleverness
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+## Why "PYREXIS"?
+
+*Pyrexis* (πύρεξις) — Greek for "fever" or "intense heat."  
+A fitting name for a system that orchestrates intense computational workloads.
+
+---
+
+**Built for engineers who need reliable job orchestration, not magic.**
