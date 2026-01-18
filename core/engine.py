@@ -7,12 +7,21 @@ This module provides the `Engine` class, which orchestrates
 the overall job lifecycle management. It integrates the:
 - StateStore for persistent job and result storage
 - Scheduler for priority-based job scheduling
+- ExecutorRouter for executing jobs with different concurrency strategies
+
+It offers methods for job submission, state advancement,
+and querying job status.
 """
 
-from typing import Optional
+import time
+from typing import Any, Optional
+from datetime import datetime
 
 from models.job import Job, JobStatus
+from models.result import Result
 from core.scheduler import Scheduler
+from core.executor import ExecutorRouter
+from core.pipeline import Pipeline
 from storage.state import StateStore
 
 class Engine:
@@ -23,17 +32,25 @@ class Engine:
     - Submits jobs to the scheduler
     - Advances job states on each tick
     - Persists job state changes to storage
+    - Executes jobs using the appropriate executor
+    - Records execution results
     """
 
-    def __init__(self, state_path: str):
+    def __init__(
+        self,
+        scheduler: Scheduler,
+        executor: ExecutorRouter,
+        state_store: StateStore,
+    ):
         """
         Initialize the engine with storage and scheduler.
 
         Args:
             state_path (str): Filesystem path for persistent state storage.
         """
-        self._state_store = StateStore(state_path)
-        self._scheduler = Scheduler()
+        self._scheduler = scheduler
+        self._executor = executor
+        self._state_store = state_store
 
     # ---------- Job Submission -----------
 
@@ -58,26 +75,26 @@ class Engine:
         # Hand off to scheduler
         self._scheduler.submit(job)
 
-    # ---------- Engine Heartbeat -----------
-    def tick(self) -> Optional[Job]:
-        """
-        Advance the engine state by one tick.
+    # # ---------- Engine Heartbeat -----------
+    # def tick(self) -> Optional[Job]:
+    #     """
+    #     Advance the engine state by one tick.
 
-        Returns:
-            Optional[Job]: Next job to execute, or None if no jobs are pending.
-        """
-        job = self._scheduler.next_job()
+    #     Returns:
+    #         Optional[Job]: Next job to execute, or None if no jobs are pending.
+    #     """
+    #     job = self._scheduler.next_job()
 
-        if job is None:
-            return None
+    #     if job is None:
+    #         return None
         
-        # Move job to RUNNING
-        job.transition_to(JobStatus.RUNNING)
+    #     # Move job to RUNNING
+    #     job.transition_to(JobStatus.RUNNING)
 
-        # Persist job state
-        self._state_store.update_job(job)
+    #     # Persist job state
+    #     self._state_store.update_job(job)
 
-        return job
+    #     return job
     
     # ------------- Query --------------
     def get_job(self, job_id: str) -> Optional[Job]:
@@ -91,3 +108,106 @@ class Engine:
             Optional[Job]: Job instance if found, otherwise None.
         """
         return self._state_store.load_job(job_id)
+    
+    # ----------- Execution steps -----------
+    def run_next(self) -> Optional[Result]:
+        """
+        Execute the next scheduled job.
+        Returns:
+            Optional[Result]: Result of the executed job, or None if no jobs to run.
+        """
+        job = self._scheduler.next_job()
+        if job is None:
+            return None
+        
+        # ------- Transition to RUNNING ------
+        job.transition_to(JobStatus.RUNNING)
+        self._state_store.update_job(job)
+
+        started_at = datetime.utcnow()
+
+        try:
+            # ---- Build Pipeline ----
+            pipeline = self._build_pipeline(job)
+
+            final_output = None
+
+            # ---- Execute Pipeline ----
+            for step_output in pipeline.run(job.payload):
+                final_output = step_output
+
+                self._on_progress(job, step_output)
+
+            ended_at = datetime.utcnow()
+
+            # ---- Success ----
+            job.transition_to(JobStatus.COMPLETED)
+            self._state_store.update_job(job)
+
+            result = Result(
+                job_id=job.job_id,
+                status="COMPLETED",
+                output=final_output,
+                started_at=started_at,
+                ended_at=ended_at,
+            )
+
+            self._state_store.save_result(result)
+            return result
+        
+        except Exception as e:
+            ended_at = datetime.utcnow()
+
+            # ---- Failure ----
+            job.record_failure(str(e))
+            self._state_store.update_job(job)
+
+            # ---- Retry Path ----
+            if job.status == JobStatus.PENDING:
+                # Exponential backoff
+                delay = 2 ** job.attempts
+                time.sleep(delay)
+
+                job.transition_to(JobStatus.PENDING)
+                self._state_store.update_job(job)
+                self._scheduler.submit(job)
+
+                return None # No result yet
+
+            # ---- Final Failure ----
+            result = Result(
+                job_id=job.job_id,
+                status="FAILED",
+                error=str(e),
+                started_at=started_at,
+                ended_at=ended_at,
+            )
+
+            self._state_store.save_result(result)
+            return result
+        
+    def _build_pipeline(self, job: Job) -> Pipeline:
+        """
+        Construct the execution pipeline for a job.
+
+        Args:
+            job (Job): Job instance for which to build the pipeline.
+        Returns:
+            Pipeline: Constructed execution pipeline.
+        """
+        def preprocess(data):
+            return data
+
+        def infer(data):
+            return {"inference": data}
+
+        def postprocess(data):
+            return data
+
+        return Pipeline([preprocess, infer, postprocess])
+
+    def _on_progress(self, job: Job, step_output: Any) -> None:
+        """
+        Hook for streaming progress.
+        """
+        pass
