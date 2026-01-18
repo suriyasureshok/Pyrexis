@@ -12,7 +12,7 @@ strategies, including:
 """
 
 import time
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any, Callable
 
 from models.job import Job, JobStatus
@@ -34,55 +34,52 @@ def _execute_job(job: Job, state_store, build_pipeline: Callable, on_progress: C
         on_progress (Callable): Function to call on progress.
         metrics: Metrics registry.
     """
-    attempts = 0
-    while attempts < job.max_retries:
-        attempts += 1
-        started_at = datetime.utcnow()
+    started_at = datetime.now(UTC)
+    
+    try:
+        pipeline = build_pipeline(job)
+        final_output = None
 
-        try:
-            pipeline = build_pipeline(job)
-            final_output = None
+        with TimedBlock(metrics, "pipeline.run"):
+            for step_output in pipeline.run(job.payload):
+                final_output = step_output
+                on_progress(job, step_output)
 
-            with TimedBlock(metrics, "pipeline.run"):
-                for step_output in pipeline.run(job.payload):
-                    final_output = step_output
-                    on_progress(job, step_output)
+        ended_at = datetime.now(UTC)
 
-            ended_at = datetime.utcnow()
+        # Transition job to completed
+        job.transition_to(JobStatus.COMPLETED)
+        state_store.update_job(job)
 
-            job.transition_to(JobStatus.COMPLETED)
+        # Create result with proper duration calculation
+        duration = (ended_at - started_at).total_seconds()
+        result = Result(
+            job_id=job.job_id,
+            status="COMPLETED",
+            output=final_output if isinstance(final_output, dict) else {"result": final_output},
+            started_at=started_at,
+            ended_at=ended_at,
+        )
+        state_store.save_result(result)
+
+    except Exception as e:
+        ended_at = datetime.now(UTC)
+
+        # Only record failure if job is not already in a terminal state
+        if job.status not in {JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED}:
+            job.record_failure(str(e))
             state_store.update_job(job)
 
+            # Create error result
+            duration = (ended_at - started_at).total_seconds()
             result = Result(
                 job_id=job.job_id,
-                status="COMPLETED",
-                output=final_output,
+                status="FAILED",
+                error=str(e),
                 started_at=started_at,
                 ended_at=ended_at,
             )
             state_store.save_result(result)
-            return
-
-        except Exception as e:
-            ended_at = datetime.utcnow()
-
-            job.record_failure(str(e))
-            if attempts < job.max_retries:
-                metrics.inc("job.retries")
-                wait_time = 2 ** attempts
-                time.sleep(wait_time)
-                # continue to retry
-            else:
-                state_store.update_job(job)
-
-                result = Result(
-                    job_id=job.job_id,
-                    status="FAILED",
-                    error=str(e),
-                    started_at=started_at,
-                    ended_at=ended_at,
-                )
-                state_store.save_result(result)
 
 
 class ExecutorRouter:
@@ -115,7 +112,8 @@ class ExecutorRouter:
         mode = job.execution_mode
 
         if mode == "thread":
-            self._thread_pool.submit(_execute_job, job, state_store, build_pipeline, on_progress, metrics)
+            # Execute synchronously for thread mode
+            _execute_job(job, state_store, build_pipeline, on_progress, metrics)
         elif mode == "process":
             self._process_pool.submit(_execute_job, job, state_store, build_pipeline, on_progress, metrics)
         elif mode == "async":

@@ -123,6 +123,68 @@ class Engine:
         """
         return self._state_store.load_job(job_id)
     
+    def get_job_status(self, job_id: str) -> Optional[JobStatus]:
+        """
+        Get the status of a specific job.
+
+        Args:
+            job_id (str): Identifier of the job.
+
+        Returns:
+            Optional[JobStatus]: Job status if found, otherwise None.
+        """
+        job = self._state_store.load_job(job_id)
+        return job.status if job else None
+    
+    def get_all_jobs(self, status: Optional[JobStatus] = None) -> list[Job]:
+        """
+        Get all jobs, optionally filtered by status.
+
+        Args:
+            status (Optional[JobStatus]): Filter by job status.
+
+        Returns:
+            list[Job]: List of jobs.
+        """
+        return self._state_store.get_all_jobs(status=status)
+    
+    def list_jobs(self, limit: int = 100) -> list[Job]:
+        """
+        List recent jobs.
+
+        Args:
+            limit (int): Maximum number of jobs to return.
+
+        Returns:
+            list[Job]: List of jobs, most recent first.
+        """
+        all_jobs = self._state_store.get_all_jobs()
+        # Sort by created_at descending (most recent first)
+        sorted_jobs = sorted(all_jobs, key=lambda j: j.created_at, reverse=True)
+        return sorted_jobs[:limit]
+    
+    def cancel_job(self, job_id: str) -> bool:
+        """
+        Cancel a job if it's still pending or running.
+
+        Args:
+            job_id (str): Identifier of the job to cancel.
+
+        Returns:
+            bool: True if job was cancelled, False otherwise.
+        """
+        job = self._state_store.load_job(job_id)
+        if not job:
+            return False
+        
+        # Can only cancel PENDING or RUNNING jobs
+        if job.status in {JobStatus.PENDING, JobStatus.RUNNING}:
+            job.transition_to(JobStatus.CANCELLED)
+            self._state_store.update_job(job)
+            return True
+        
+        return False
+    
     # ----------- Execution steps -----------
     def run_next(self) -> Optional[Result]:
         """
@@ -141,11 +203,13 @@ class Engine:
         job.transition_to(JobStatus.RUNNING)
         self._state_store.update_job(job)
 
-        # Execute using executor
+        # Execute using executor (this now completes synchronously for thread mode)
         with TimedBlock(self._metrics, "job.execution"):
             self._executor.execute(job, self._state_store, self._build_pipeline, self._on_progress, self._metrics)
 
-        return None
+        # Load and return the result
+        result = self._state_store.load_result(job.job_id)
+        return result
         
     def _build_pipeline(self, job: Job) -> Pipeline:
         """
@@ -160,7 +224,7 @@ class Engine:
 
         pipeline_cls = PluginRegistry.get_plugin(pipeline_type)
         pipeline_instance = pipeline_cls()
-    
+
         return Pipeline(pipeline_instance.stages())
 
 

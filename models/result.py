@@ -13,7 +13,7 @@ This module defines a `Result` data model using Pydantic. It provides:
 from datetime import datetime
 from typing import Any, Dict, Optional, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, model_validator, computed_field
 
 
 class Result(BaseModel):
@@ -42,21 +42,25 @@ class Result(BaseModel):
     error: Optional[str] = None
     started_at: datetime
     ended_at: datetime
-    duration: float = Field(init=False)
+    
+    @computed_field
+    @property
+    def duration(self) -> float:
+        """Compute execution duration in seconds."""
+        return (self.ended_at - self.started_at).total_seconds()
 
     @model_validator(mode="after")
     def validate_result_invariants(self) -> "Result":
         """
-        Validate cross-field invariants and compute execution duration.
+        Validate cross-field invariants.
 
         Validation rules enforced:
         - ended_at must be later than started_at
-        - duration is computed from timestamps
         - output must be present when status is COMPLETED
         - error must be present when status is FAILED
 
         Returns:
-            Result: The validated and augmented Result instance.
+            Result: The validated Result instance.
 
         Raises:
             ValueError: If timestamps are invalid or required fields
@@ -64,8 +68,6 @@ class Result(BaseModel):
         """
         if self.ended_at < self.started_at:
             raise ValueError("ended_at must be after started_at")
-
-        self.duration = (self.ended_at - self.started_at).total_seconds()
 
         if self.status == "COMPLETED" and self.output is None:
             raise ValueError("output must be provided for COMPLETED results")

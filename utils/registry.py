@@ -43,3 +43,8 @@ class PluginRegistry(type):
     @classmethod
     def all_plugins(mcls):
         return dict(mcls._registry)
+
+    @classmethod
+    def clear_registry(mcls):
+        """Clear all registered plugins (useful for testing)."""
+        mcls._registry.clear()

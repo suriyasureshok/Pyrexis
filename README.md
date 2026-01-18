@@ -60,6 +60,8 @@ graph LR
 
 ## Minimal Example
 
+### Programmatic API
+
 ```python
 from core import Engine, Scheduler, ExecutorRouter
 from models import Job, JobStatus
@@ -92,6 +94,37 @@ engine.submit_job(job)
 # Run engine loop
 engine.run_loop()  # Processes jobs until shutdown
 ```
+
+### Command-Line Interface
+
+```bash
+# Submit a job
+python main.py submit \
+  --job-id task-1 \
+  --priority 5 \
+  --payload '{"type": "example", "data": "process_this"}' \
+  --mode thread
+
+# Check status
+python main.py status --job-id task-1
+
+# Start daemon to process jobs
+python main.py daemon
+
+# Monitor in real-time
+python main.py monitor
+
+# List recent jobs
+python main.py list --limit 20
+
+# Cancel a job
+python main.py cancel --job-id task-1
+
+# View metrics
+python main.py metrics
+```
+
+**See [docs/CLI.md](docs/CLI.md) for complete CLI reference.**
 
 ---
 
@@ -144,7 +177,7 @@ PYREXIS is designed for **graceful degradation**, not perfect uptime:
 job.record_failure("Connection timeout")
 
 # Automatic retry if attempts < max_retries
-if job.attempts < job.max_entries:
+if job.attempts < job.max_retries:
     job.status = RETRYING
     # Exponential backoff: 2^attempts seconds
 else:
@@ -185,10 +218,13 @@ git clone https://github.com/yourusername/pyrexis.git
 cd pyrexis
 
 # Install dependencies (minimal)
-pip install pydantic
+pip install pydantic pytest
+
+# Or install in development mode
+pip install -e .
 
 # Run tests
-python -m unittest discover tests
+pytest tests/ -v
 ```
 
 ---
@@ -207,15 +243,17 @@ PYREXIS has **47 brutal tests** that try to break the system:
 
 ```bash
 # Run all tests
-python -m unittest discover tests -v
+pytest tests/ -v
 
 # Run specific test category
-python -m unittest tests.test_scheduler -v
-python -m unittest tests.test_concurrency -v
-python -m unittest tests.test_shutdown -v
-```
+pytest tests/test_scheduler.py -v
+pytest tests/test_concurrency.py -v
+pytest tests/test_shutdown.py -v
+pytest tests/test_load.py -v
 
-See [docs/TESTING.md](docs/TESTING.md) for detailed testing philosophy.
+# Run with coverage
+pytest tests/ --cov=. --cov-report=html
+```
 
 ---
 
@@ -223,12 +261,34 @@ See [docs/TESTING.md](docs/TESTING.md) for detailed testing philosophy.
 
 ```
 pyrexis/
+├── api/                # CLI interface for job management
 ├── core/               # Engine, Scheduler, Pipeline, Executor
+│   ├── engine.py       # Job lifecycle orchestration
+│   ├── scheduler.py    # Priority-based job scheduling
+│   ├── pipeline.py     # Multi-stage streaming execution
+│   ├── executor.py     # Concurrency routing
+│   └── base_pipeline.py # Base class for custom pipelines
 ├── models/             # Job and Result data models
+│   ├── job.py          # Job model with state machine
+│   └── result.py       # Execution result model
 ├── storage/            # StateStore persistence
+│   └── state.py        # File-based state storage (shelve)
 ├── concurrency/        # Thread/Process/Async pools
-├── utils/              # Metrics, Logging, Retry, Shutdown
-├── tests/              # 47 brutal test cases
+│   ├── threads.py      # ThreadWorkerPool for I/O-bound tasks
+│   ├── processes.py    # ProcessWorkerPool for CPU-bound tasks
+│   └── async_tasks.py  # AsyncTaskRunner for event-driven tasks
+├── utils/              # Utilities and observability
+│   ├── metrics.py      # MetricsRegistry and TimedBlock
+│   ├── logging.py      # Logging configuration
+│   ├── retry.py        # Retry decorators and utilities
+│   ├── shutdown.py     # ShutdownCoordinator
+│   ├── cache.py        # LRU cache implementation
+│   ├── profiling.py    # Performance profiling tools
+│   ├── timing.py       # Timer utilities
+│   └── registry.py     # PluginRegistry metaclass
+├── plugins/            # Custom pipeline implementations
+│   └── text_inference.py # Example text inference pipeline
+├── tests/              # Comprehensive test suite
 └── docs/               # Architecture and design docs
 ```
 

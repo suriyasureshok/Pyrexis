@@ -11,7 +11,7 @@ This module defines a `Job` data model using Pydantic. It includes:
 """
 
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any, Dict, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -78,8 +78,8 @@ class Job(BaseModel):
     attempts: int = 0
     status: JobStatus = JobStatus.CREATED
     last_error: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
     @field_validator("execution_mode")
     @classmethod
@@ -121,7 +121,7 @@ class Job(BaseModel):
             )
 
         self.status = new_status
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(UTC)
 
     def record_failure(self, error_message: str) -> None:
         """

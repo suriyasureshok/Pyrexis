@@ -89,10 +89,15 @@ graph TB
 | **ExecutorRouter** | Route jobs by execution mode | N/A (stateless) |
 | **ThreadWorkerPool** | Execute I/O-bound tasks | Yes (queue.Queue) |
 | **ProcessWorkerPool** | Execute CPU-bound tasks | Yes (multiprocessing.Queue) |
+| **AsyncTaskRunner** | Execute async tasks | Yes (asyncio.Queue) |
 | **Pipeline** | Multi-stage streaming | No (single-threaded per job) |
 | **StateStore** | Persist jobs and results | Yes (shelve writes) |
 | **MetricsRegistry** | Collect timing/counters | Yes (threading.Lock) |
 | **ShutdownCoordinator** | Graceful shutdown | Yes (threading.Event) |
+| **LRUCache** | In-memory TTL-based cache | Yes (threading.Lock) |
+| **PerformanceTracker** | Profile function execution | Yes (threading.Lock) |
+| **PluginRegistry** | Auto-register plugins | Yes (metaclass) |
+| **Timer** | Measure elapsed time | No (context manager) |
 
 ---
 
@@ -170,7 +175,7 @@ def record_failure(self, error_message: str) -> None:
     self.last_error = error_message
     self.attempts += 1
     
-    if self.attempts >= self.max_entries:
+    if self.attempts >= self.max_retries:
         self.transition_to(JobStatus.FAILED)
     else:
         self.transition_to(JobStatus.RETRYING)
@@ -178,7 +183,7 @@ def record_failure(self, error_message: str) -> None:
 
 **Key properties**:
 - Attempts increment **before** transition
-- Exactly `max_entries` attempts are allowed
+- Exactly `max_retries` attempts are allowed
 - Last error is always preserved
 
 ---
@@ -424,6 +429,85 @@ class ShutdownCoordinator:
 | Metrics increment | O(1) | Yes (lock contention) |
 
 **Note**: Scheduler aging is O(n) on every `next_job()` call. This is acceptable for <10k jobs but would need optimization for larger scales.
+
+---
+
+## Utilities & Observability
+
+### Performance Profiling
+
+The `utils/profiling.py` module provides comprehensive profiling capabilities:
+
+```python
+from utils.profiling import profile_time, profile_memory, Profiler
+
+@profile_time
+def my_function():
+    # Automatically tracked execution time
+    pass
+
+@profile_memory
+def memory_intensive():
+    # Tracks memory usage with tracemalloc
+    pass
+
+# Context-based profiling
+with Profiler() as prof:
+    # Code to profile
+    execute_pipeline()
+prof.print_report()
+```
+
+### Caching
+
+The `utils/cache.py` module provides an LRU cache with TTL support:
+
+```python
+from utils.cache import LRUCache
+
+cache = LRUCache(max_size=128, ttl=300)  # 5 minutes TTL
+cache["key"] = "value"
+value = cache.get("key")  # Returns None if expired
+```
+
+### Plugin System
+
+The `utils/registry.py` module enables automatic plugin registration:
+
+```python
+from utils.registry import PluginRegistry
+from core.base_pipeline import BasePipeline
+
+class MyPipeline(BasePipeline, metaclass=PluginRegistry):
+    name = "my_pipeline"  # Auto-registered
+    
+    def stages(self):
+        return [self.stage1, self.stage2]
+
+# Retrieve plugin
+plugin = PluginRegistry.get_plugin("my_pipeline")
+```
+
+### Example Plugins
+
+**Text Inference Pipeline** ([plugins/text_inference.py](plugins/text_inference.py)):
+
+```python
+class TextInferencePipeline(BasePipeline):
+    name = "text_inference"
+    
+    def stages(self):
+        return [self.preprocess, self.fake_model_call, self.postprocess]
+    
+    def preprocess(self, payload):
+        return payload["prompt"].strip()
+    
+    def fake_model_call(self, text):
+        return f"MODEL_OUTPUT({text})"
+    
+    def postprocess(self, output):
+        return {"result": output}
+```
 
 ---
 
