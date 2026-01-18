@@ -3,56 +3,65 @@ concurrency/processes.py
 
 Process management utilities for concurrent job execution.
 
-This module provides helper functions and classes to manage
-process-based concurrency, including:
-- Process pool management
-- Safe process creation and termination
-- Synchronization primitives for shared resource access
+This module provides a ProcessWorkerPool for managing
+process-based concurrency using a queue-based approach.
 """
 
-from concurrent.futures import ProcessPoolExecutor
-from typing import Any
+from multiprocessing import Process, Queue
+from typing import Callable, Any
 
-from models.job import Job
 
-class ProcessExecutor:
+class ProcessWorkerPool:
     """
-    Process pool executor for managing concurrent job execution.
-    This ProcessExecutor:
-    - Manages a pool of worker processes
-    - Provides an interface to submit jobs for execution
-    - Handles process lifecycle and resource cleanup
+    Process worker pool for executing tasks concurrently across processes.
+
+    This pool manages a fixed number of worker processes that process
+    tasks submitted via a multiprocessing queue. All arguments must be
+    pickleable for inter-process communication.
     """
 
-    def __init__(self, max_workers: int = 2):
+    def __init__(self, num_workers: int = 2):
         """
-        Initialize the process pool executor.
+        Initialize the process worker pool.
 
         Args:
-            max_workers (int): Maximum number of processes in the pool.
+            num_workers (int): Number of worker processes to create.
         """
-        self._pool = ProcessPoolExecutor(max_workers=max_workers)
+        self._task_queue = Queue()
+        self._processes = []
 
-    def execute(self, job: Job) -> Any:
+        for i in range(num_workers):
+            p = Process(
+                target=self._worker,
+                args=(self._task_queue,),
+                daemon=True
+            )
+            p.start()
+            self._processes.append(p)
+
+    def submit(self, fn: Callable, *args):
         """
-        Execute a job in a separate process.
+        Submit a task to the worker pool.
 
         Args:
-            job (Job): Job instance to execute.
-        Returns:
-            Any: Result of the job execution.
+            fn (Callable): Function to execute (must be pickleable).
+            *args: Positional arguments for the function (must be pickleable).
         """
-        future = self._pool.submit(self._run_job, job.payload)
-        return future.result()
+        # args must be pickleable
+        self._task_queue.put((fn, args))
 
     @staticmethod
-    def _run_job(payload: dict) -> Any:
+    def _worker(queue: Queue):
         """
-        Internal method to run the job logic.
-        Args:
-            payload (dict): Payload of the job to run.
-        Returns:
-            Any: Result of the job execution.
+        Worker process function that processes tasks from the queue.
         """
-        # Must be pickle-safe
-        return {"process_result": payload}
+        while True:
+            fn, args = queue.get()
+            fn(*args)
+
+    def shutdown(self):
+        """
+        Shutdown the worker pool and terminate all processes.
+        """
+        for p in self._processes:
+            p.terminate()

@@ -3,59 +3,68 @@ concurrency/threads.py
 
 Thread management utilities for concurrent job execution.
 
-This module provides helper functions and classes to manage
-thread-based concurrency, including:
-- Thread pool management
-- Safe thread creation and termination
-- Synchronization primitives for shared resource access
+This module provides a ThreadWorkerPool for managing
+thread-based concurrency using a queue-based approach.
 """
 
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+import threading
+from queue import Queue
+from typing import Callable, Any
 
-from models.job import Job
 
-class ThreadExecutor:
+class ThreadWorkerPool:
     """
-    Thread pool executor for managing concurrent job execution.
+    Thread worker pool for executing tasks concurrently.
 
-    This ThreadExecutor:
-    - Manages a pool of worker threads
-    - Provides an interface to submit jobs for execution
-    - Handles thread lifecycle and resource cleanup
+    This pool manages a fixed number of worker threads that process
+    tasks submitted via a thread-safe queue.
     """
-    def __init__(self, max_workers: int = 4):
+
+    def __init__(self, num_workers: int = 4):
         """
-        Initialize the thread pool executor.
+        Initialize the thread worker pool.
 
         Args:
-            max_workers (int): Maximum number of threads in the pool.
+            num_workers (int): Number of worker threads to create.
         """
-        self._pool = ThreadPoolExecutor(max_workers=max_workers)
+        self._queue = Queue()
+        self._workers = []
+        self._shutdown = threading.Event()
 
-    def execute(self, job: Job) -> Any:
-        """
-        Execute a job in a separate thread.
+        for i in range(num_workers):
+            t = threading.Thread(
+                target=self._worker,
+                name=f"thread-worker-{i}",
+                daemon=True
+            )
+            t.start()
+            self._workers.append(t)
 
-        Args:
-            job (Job): Job instance to execute.
-        Returns:
-            Any: Result of the job execution.
+    def submit(self, fn: Callable, *args, **kwargs):
         """
-        future = self._pool.submit(self._run_job, job)
-        return future.result()
-    
-    @staticmethod
-    def _run_job(self, job: Job) -> Any:
-        """
-        Internal method to run the job logic.
+        Submit a task to the worker pool.
 
         Args:
-            job (Job): Job instance to run.
-        Returns:
-            Any: Result of the job execution.
+            fn (Callable): Function to execute.
+            *args: Positional arguments for the function.
+            **kwargs: Keyword arguments for the function.
         """
-        # Placeholder for actual job execution logic
-        # This should be replaced with the real implementation
-        payload = job.payload
-        return {"thread_result": payload}
+        self._queue.put((fn, args, kwargs))
+
+    def _worker(self):
+        """
+        Worker thread function that processes tasks from the queue.
+        """
+        while not self._shutdown.is_set():
+            try:
+                fn, args, kwargs = self._queue.get(timeout=0.5)
+                fn(*args, **kwargs)
+                self._queue.task_done()
+            except Exception:
+                continue
+
+    def shutdown(self):
+        """
+        Shutdown the worker pool and stop all threads.
+        """
+        self._shutdown.set()

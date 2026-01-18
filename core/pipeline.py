@@ -31,6 +31,31 @@ class Pipeline:
             stages (Iterable[Callable[..., Any]]): Sequence of functions representing pipeline stages.
         """
         self._stages = stages
+        self._index = 0
+        self._data = None
+
+    def __iter__(self):
+        """
+        Initialize the iterator.
+        """
+        self._index = 0
+        return self
+    
+    def __next__(self) -> Any:
+        """
+        Execute the next stage in the pipeline.
+        Returns:
+            Any: Output from the current stage.
+        Raises:
+            StopIteration: When all stages have been executed.
+        """
+        if self._index >= len(self._stages):
+            raise StopIteration
+        
+        stage = self._stages[self._index]
+        self._data = stage(self._data)
+        self._index += 1
+        return self._data
 
     def run(self, initial_input: Any) -> Generator[Any, None, None]:
         """

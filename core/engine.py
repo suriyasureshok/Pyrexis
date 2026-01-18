@@ -120,71 +120,14 @@ class Engine:
         if job is None:
             return None
         
-        # ------- Transition to RUNNING ------
+        # Move job to RUNNING
         job.transition_to(JobStatus.RUNNING)
         self._state_store.update_job(job)
 
-        started_at = datetime.utcnow()
+        # Execute using executor
+        self._executor.execute(job, self._state_store, self._build_pipeline, self._on_progress)
 
-        try:
-            # ---- Build Pipeline ----
-            pipeline = self._build_pipeline(job)
-
-            final_output = None
-
-            # ---- Execute Pipeline ----
-            for step_output in pipeline.run(job.payload):
-                final_output = step_output
-
-                self._on_progress(job, step_output)
-
-            ended_at = datetime.utcnow()
-
-            # ---- Success ----
-            job.transition_to(JobStatus.COMPLETED)
-            self._state_store.update_job(job)
-
-            result = Result(
-                job_id=job.job_id,
-                status="COMPLETED",
-                output=final_output,
-                started_at=started_at,
-                ended_at=ended_at,
-            )
-
-            self._state_store.save_result(result)
-            return result
-        
-        except Exception as e:
-            ended_at = datetime.utcnow()
-
-            # ---- Failure ----
-            job.record_failure(str(e))
-            self._state_store.update_job(job)
-
-            # ---- Retry Path ----
-            if job.status == JobStatus.PENDING:
-                # Exponential backoff
-                delay = 2 ** job.attempts
-                time.sleep(delay)
-
-                job.transition_to(JobStatus.PENDING)
-                self._state_store.update_job(job)
-                self._scheduler.submit(job)
-
-                return None # No result yet
-
-            # ---- Final Failure ----
-            result = Result(
-                job_id=job.job_id,
-                status="FAILED",
-                error=str(e),
-                started_at=started_at,
-                ended_at=ended_at,
-            )
-
-            self._state_store.save_result(result)
-            return result
+        return None
         
     def _build_pipeline(self, job: Job) -> Pipeline:
         """

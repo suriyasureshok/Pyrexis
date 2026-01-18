@@ -141,3 +141,15 @@ class Job(BaseModel):
             self.transition_to(JobStatus.FAILED)
         else:
             self.transition_to(JobStatus.RETRYING)
+
+    def __eq__(self, other):
+        """
+        Equality comparison based on job_id.
+        """
+        return isinstance(other, Job) and self.job_id == other.job_id
+
+    def __hash__(self):
+        """
+        Hash based on job_id.
+        """
+        return hash(self.job_id)

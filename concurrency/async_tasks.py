@@ -3,30 +3,43 @@ concurrency/async_tasks.py
 
 Asynchronous task management utilities for concurrent job execution.
 
-This module provides helper functions and classes to manage
-asynchronous concurrency, including:
-- Async task pool management
-- Safe async task creation and termination
-- Synchronization primitives for shared resource access
+This module provides an AsyncTaskRunner for managing
+asynchronous concurrency using asyncio queues.
 """
 
 import asyncio
-from typing import Any
+from typing import Callable, Any
 
-from models.job import Job
 
-class AsyncTaskExecutor:
+class AsyncTaskRunner:
     """
-    Asynchronous task executor for managing concurrent job execution.
-    This AsyncTaskExecutor:
-    - Manages a pool of asynchronous tasks
-    - Provides an interface to submit jobs for execution
-    - Handles task lifecycle and resource cleanup
+    Asynchronous task runner for executing coroutines concurrently.
+
+    This runner manages a queue of asynchronous tasks and processes
+    them in a single event loop.
     """
 
-    async def execute(self, job: Job) -> Any:
+    def __init__(self):
         """
-        Execute a job asynchronously.
+        Initialize the async task runner.
         """
-        await asyncio.sleep(0)  # simulate async work
-        return {"async_result": job.payload}
+        self._queue = asyncio.Queue()
+
+    async def submit(self, coro: Callable[..., Any], *args):
+        """
+        Submit a coroutine to the task queue.
+
+        Args:
+            coro: Coroutine function to execute.
+            *args: Arguments for the coroutine.
+        """
+        await self._queue.put((coro, args))
+
+    async def run(self):
+        """
+        Run the task processing loop.
+        """
+        while True:
+            coro, args = await self._queue.get()
+            await coro(*args)
+            self._queue.task_done()
