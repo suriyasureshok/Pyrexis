@@ -3,7 +3,7 @@ storage/state.py
 
 Persistent state management for jobs and results.
 
-This module provides the `StorageState` class, which uses Python's
+This module provides the `StateStore` class, which uses Python's
 `shelve` module to persist `Job` and `Result` objects. It acts as a
 trust boundary by validating all objects upon retrieval.
 """
@@ -15,7 +15,7 @@ from models.job import Job
 from models.result import Result
 
 
-class StorageState:
+class StateStore:
     """
     Durable storage for Job and Result objects using shelve.
 
@@ -80,6 +80,23 @@ class StorageState:
             except Exception:
                 # Corrupted or invalid stored data
                 return None
+            
+    def update_job(self, job: Job) -> None:
+        """
+        Update an existing Job object in storage.
+
+        This method overwrites the stored job data with the
+        current state of the provided Job instance.
+
+        Args:
+            job (Job): Job instance to update.
+        """
+        key = f"job:{job.job_id}"
+
+        with shelve.open(self._path, writeback=False) as db:
+            if key not in db:
+                raise RuntimeError(f"Job with id {job.job_id} does not exist.")
+            db[key] = job.model_dump()
 
     # ------- Result storage -------
 
