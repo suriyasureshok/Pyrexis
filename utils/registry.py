@@ -1,25 +1,45 @@
 """
 utils/registry.py
 
-Plugin registry metaclass for automatic registration of plugins.
+Plugin registration utilities.
 
-This module defines a metaclass `PluginRegistry` that automatically
-registers any class that uses it as a metaclass into a central registry.
+This module provides a PluginRegistry metaclass that
+automatically registers classes by a specified name.
 """
+
+from typing import Dict, Type
+
 
 class PluginRegistry(type):
     """
-    Metaclass for automatic plugin registration.
-    Upon class creation, registers the class in the `registry` dictionary.
+    Metaclass that auto-registers plugins by name.
+
+    Classes using this metaclass should define a class-level
+    attribute `name` which will be used as the registration key.
     """
-    registry = {}
 
-    def __new__(cls, name, bases, attrs):
-        new_cls = super().__new__(cls, name, bases, attrs)
-        if name != "BasePlugin":
-            cls.registry[name] = new_cls
-        return new_cls
+    _registry: Dict[str, Type] = {}
 
+    def __new__(mcls, name, bases, namespace):
+        cls = super().__new__(mcls, name, bases, namespace)
 
-class BasePlugin(metaclass=PluginRegistry):
-    pass
+        plugin_name = namespace.get("name")
+
+        if plugin_name:
+            if plugin_name in mcls._registry:
+                raise RuntimeError(
+                    f"Duplicate plugin name: {plugin_name}"
+                )
+            mcls._registry[plugin_name] = cls
+
+        return cls
+
+    @classmethod
+    def get_plugin(mcls, name: str):
+        if name not in mcls._registry:
+            raise KeyError(f"No plugin registered for '{name}'")
+        return mcls._registry[name]
+
+    @classmethod
+    def all_plugins(mcls):
+        return dict(mcls._registry)

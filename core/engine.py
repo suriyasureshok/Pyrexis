@@ -23,6 +23,10 @@ from core.scheduler import Scheduler
 from core.executor import ExecutorRouter
 from core.pipeline import Pipeline
 from storage.state import StateStore
+from utils.metrics import MetricsRegistry, TimedBlock
+from utils.shutdown import ShutdownCoordinator
+from utils.registry import PluginRegistry
+
 
 class Engine:
     """
@@ -41,16 +45,26 @@ class Engine:
         scheduler: Scheduler,
         executor: ExecutorRouter,
         state_store: StateStore,
+        shutdown_coordinator: ShutdownCoordinator,
     ):
         """
         Initialize the engine with storage and scheduler.
 
         Args:
-            state_path (str): Filesystem path for persistent state storage.
+            scheduler: Job scheduler.
+            executor: Job executor.
+            state_store: State store.
+            shutdown_coordinator: Shutdown coordinator.
         """
         self._scheduler = scheduler
         self._executor = executor
         self._state_store = state_store
+        self._shutdown = shutdown_coordinator
+        self._metrics = MetricsRegistry()
+
+        # Register shutdown callbacks for concurrency pools
+        self._shutdown.register(self._executor._thread_pool.shutdown)
+        self._shutdown.register(self._executor._process_pool.shutdown)
 
     # ---------- Job Submission -----------
 
@@ -116,6 +130,9 @@ class Engine:
         Returns:
             Optional[Result]: Result of the executed job, or None if no jobs to run.
         """
+        if self._shutdown.should_shutdown():
+            return None
+
         job = self._scheduler.next_job()
         if job is None:
             return None
@@ -125,7 +142,8 @@ class Engine:
         self._state_store.update_job(job)
 
         # Execute using executor
-        self._executor.execute(job, self._state_store, self._build_pipeline, self._on_progress)
+        with TimedBlock(self._metrics, "job.execution"):
+            self._executor.execute(job, self._state_store, self._build_pipeline, self._on_progress, self._metrics)
 
         return None
         
@@ -138,19 +156,29 @@ class Engine:
         Returns:
             Pipeline: Constructed execution pipeline.
         """
-        def preprocess(data):
-            return data
+        pipeline_type = job.payload["type"]
 
-        def infer(data):
-            return {"inference": data}
+        pipeline_cls = PluginRegistry.get_plugin(pipeline_type)
+        pipeline_instance = pipeline_cls()
+    
+        return Pipeline(pipeline_instance.stages())
 
-        def postprocess(data):
-            return data
-
-        return Pipeline([preprocess, infer, postprocess])
 
     def _on_progress(self, job: Job, step_output: Any) -> None:
         """
         Hook for streaming progress.
         """
         pass
+
+    def get_metrics(self):
+        """
+        Get the metrics registry.
+        """
+        return self._metrics
+
+    def run_loop(self):
+        """
+        Run the engine loop until shutdown is initiated.
+        """
+        while not self._shutdown.should_shutdown():
+            self.run_next()

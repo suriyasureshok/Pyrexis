@@ -1,6 +1,7 @@
-def main():
-    print("Hello from pyrexis!")
+import signal
+from utils.shutdown import ShutdownCoordinator
 
+shutdown = ShutdownCoordinator()
 
-if __name__ == "__main__":
-    main()
+signal.signal(signal.SIGINT, shutdown.initiate_shutdown)
+signal.signal(signal.SIGTERM, shutdown.initiate_shutdown)
