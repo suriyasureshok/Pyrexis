@@ -2,7 +2,7 @@
 
 > A pure-Python concurrent job execution engine for AI infrastructure workloads.
 
-[![Tests](https://img.shields.io/badge/tests-47%20passing-brightgreen)]() [![Python](https://img.shields.io/badge/python-3.10+-blue)]() [![License](https://img.shields.io/badge/license-MIT-blue)]()
+[![Tests](https://img.shields.io/badge/tests-67%20passing-brightgreen)]() [![Python](https://img.shields.io/badge/python-3.10+-blue)]() [![License](https://img.shields.io/badge/license-MIT-blue)]()
 
 ## Why PYREXIS?
 
